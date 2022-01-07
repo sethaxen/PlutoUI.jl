@@ -194,7 +194,12 @@ begin
 					input_el.addEventListener("input", () => {
 						output_el.value = displays[input_el.valueAsNumber - 1]
 					})
-					</script><output>$(string(slider.default))</output>"""
+					</script><output style='
+						font-family: system-ui;
+    					font-size: 15px;
+    					margin-left: 3px;
+    					transform: translateY(-3px);
+    					display: inline-block;'>$(string(slider.default))</output>"""
 				) : nothing
 			)"""))
 	end
@@ -289,7 +294,7 @@ begin
 		# reference the bound variable - clicking the button will run this cell
 		go
 
-		md"My favorite number is $(rand())!"
+		md"My favorite number is \$(rand())!"
 	end
 	```
 	"""
@@ -341,7 +346,7 @@ begin
 		# reference the bound variable - clicking the button will run this cell
 		go
 
-		md"My favorite number is $(rand())!"
+		md"My favorite number is \$(rand())!"
 	end
 	```
 	"""
