@@ -295,7 +295,7 @@ begin
     Bonds.initial_value(select::MultiCheckBox{BT,DT}) where {BT,DT} = 
         ismissing(select.default) ? BT[] : select.default
     Bonds.possible_values(select::MultiCheckBox) = 
-        subarrays(map(string, 1:length(select.options)))
+        collect(subarrays(map(string, 1:length(select.options))))
     
     function Bonds.transform_value(select::MultiCheckBox{BT,DT}, val_from_js) where {BT,DT}
         # val_from_js will be a vector of Strings, but let's allow Integers as well, there's no harm in that
