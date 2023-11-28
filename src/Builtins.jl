@@ -1,5 +1,5 @@
 ### A Pluto.jl notebook ###
-# v0.19.25
+# v0.19.32
 
 using Markdown
 using InteractiveUtils
@@ -56,12 +56,12 @@ begin
 		default::Real
 		show_value::Bool
 	end
-	
-	
+
+
 	OldSlider(range::AbstractRange; default=missing, show_value=false) = OldSlider(range, (default === missing) ? first(range) : default, show_value)
-	
+
 	function Base.show(io::IO, m::MIME"text/html", slider::OldSlider)
-		show(io, m, 
+		show(io, m,
 			@htl("""<input $((
 					type="range",
 					min=first(slider.range),
@@ -70,8 +70,8 @@ begin
 					value=slider.default,
 					oninput=(slider.show_value ? "this.nextElementSibling.value=this.value" : ""),
 				))>$(
-					slider.show_value ? 
-						@htl("<output>$(slider.default)</output>") : 
+					slider.show_value ?
+						@htl("<output>$(slider.default)</output>") :
 						nothing
 				)"""))
 	end
@@ -112,7 +112,8 @@ end
 
 # ╔═╡ db3aefaa-9539-4c46-ad9b-83763f9ef624
 # Like `argmin` in Julia 1.7
-argmin_compat(f,xs) = xs[findmin(Iterators.map(f,xs))[2]]
+# based on Compat.jl
+argmin_compat(f,xs) = mapfoldl(x -> (f(x), x), ((a1,a2),(b1,b2)) -> a1 > b1 ? (b1,b2) : (a1,a2), xs)[2]
 
 # ╔═╡ 97fc914b-005f-4b4d-80cb-23016d589609
 function closest(values::AbstractVector{<:Real}, x::Real)
@@ -142,18 +143,18 @@ begin
 		show_value::Bool
 	end
 	end
-	
+
 	function downsample(x::AbstractVector{T}, max_steps::Integer) where T
 		if max_steps >= length(x)
 			x
 		else
 			T[
-				x[round(Int, i)] 
+				x[round(Int, i)]
 				for i in range(firstindex(x), stop=lastindex(x), length=max_steps)
 			]
 		end
 	end
-	
+
 	function Slider(values::AbstractVector{T}; default=missing, show_value=false, max_steps=1_000) where T
 		new_values = downsample(values, max_steps)
 		Slider(new_values, (default === missing) ? first(new_values) : let
@@ -161,7 +162,7 @@ begin
 			d ∈ new_values ? convert(T, d) : closest(new_values, d)
 		end, show_value)
 	end
-	
+
 	function Base.show(io::IO, m::MIME"text/html", slider::Slider)
 
 		# compat code
@@ -175,7 +176,7 @@ begin
 		end
 
 		start_index = findfirst(isequal(slider.default), slider.values)
-		
+
 		show(io, m, @htl(
 			"""<input $((
 				type="range",
@@ -188,9 +189,17 @@ begin
 					const input_el = currentScript.previousElementSibling
 					const output_el = currentScript.nextElementSibling
 					const displays = $(string.(slider.values))
-					
-					input_el.addEventListener("input", () => {
+
+					let update_output = () => {
 						output_el.value = displays[input_el.valueAsNumber - 1]
+					}
+
+					input_el.addEventListener("input", update_output)
+					// We also poll for changes because the `input_el.value` can change from the outside, e.g. https://github.com/JuliaPluto/PlutoUI.jl/issues/277
+					let id = setInterval(update_output, 200)
+					invalidation.then(() => {
+						clearInterval(id)
+						input_el.removeEventListener("input", update_output)
 					})
 					</script><output style='
 						font-family: system-ui;
@@ -204,13 +213,13 @@ begin
 
 	Base.get(slider::Slider) = slider.default
 	Bonds.initial_value(slider::Slider) = slider.default
-	
+
 	Bonds.possible_values(slider::Slider) = 1:length(slider.values)
-	
+
 	function Bonds.transform_value(slider::Slider, val_from_js)
 		slider.values[val_from_js]
 	end
-	
+
 	function Bonds.validate_value(slider::Slider, val)
 		val isa Integer && 1 <= val <= length(slider.values)
 	end
@@ -248,12 +257,12 @@ begin
 		default::Number
 	end
 	end
-	
+
 	NumberField(range::AbstractRange{<:T}; default=missing) where T = NumberField(range, (default === missing) ? first(range) : let
 		d = default
 		d ∈ range ? convert(T, d) : closest(range, d)
 	end)
-	
+
 	function Base.show(io::IO, m::MIME"text/html", numberfield::NumberField)
 		show(io, m, @htl("""<input $((
 				type="number",
@@ -263,7 +272,7 @@ begin
 				value=numberfield.default
 			))>"""))
 	end
-	
+
 	Base.get(numberfield::NumberField) = numberfield.default
 	Bonds.initial_value(nf::NumberField) = nf.default
 	Bonds.possible_values(nf::NumberField) = nf.range
@@ -308,11 +317,11 @@ begin
 	end
 	end
 	LabelButton() = LabelButton("Click")
-	
+
 	function Base.show(io::IO, m::MIME"text/html", button::LabelButton)
 		show(io, m, @htl("""<input type="button" value="$(button.label)">"""))
 	end
-	
+
 	Base.get(button::LabelButton) = button.label
 	Bonds.initial_value(b::LabelButton) = b.label
 	Bonds.possible_values(b::LabelButton) = [b.label]
@@ -363,26 +372,26 @@ begin
 	end
 	end
 	CounterButton() = CounterButton("Click")
-	
+
 	function Base.show(io::IO, m::MIME"text/html", button::CounterButton)
 		show(io, m, @htl(
 			"""<span><input type="button" value=$(button.label)><script>
 		let count = 0
 		const span = currentScript.parentElement
 		const button = span.firstElementChild
-		
+
 		span.value = count
-		
+
 		button.addEventListener("click", (e) => {
 		count += 1
 		span.value = count
 		span.dispatchEvent(new CustomEvent("input"))
 		e.stopPropagation()
-			
+
 		})
 		</script></span>"""))
 	end
-	
+
 	Base.get(button::CounterButton) = 0
 	Bonds.initial_value(b::CounterButton) = 0
 	Bonds.possible_values(b::CounterButton) = Bonds.InfinitePossibilities()
@@ -410,13 +419,13 @@ begin
 		default::Bool
 	end
 	end
-	
+
 	CheckBox(;default::Bool=false) = CheckBox(default)
-	
+
 	function Base.show(io::IO, ::MIME"text/html", button::CheckBox)
 		print(io, """<input type="checkbox"$(button.default ? " checked" : "")>""")
 	end
-	
+
 	Base.get(checkbox::CheckBox) = checkbox.default
 	Bonds.initial_value(b::CheckBox) = b.default
 	Bonds.possible_values(b::CheckBox) = [false, true]
@@ -438,7 +447,7 @@ begin
 	# with specified size:
 	TextField(size; default="", placeholder=nothing)
 	```
-	
+
 	A text input - the user can type text, the text is returned as `String` via `@bind`.
 
 	# Keyword arguments
@@ -453,7 +462,7 @@ begin
 	```julia
 	@bind author TextField()
 	```
-	
+
 	```julia
 	@bind poem TextField((30,5); default="Hello\\nJuliaCon!")
 	```
@@ -464,12 +473,12 @@ begin
 		placeholder::Union{AbstractString,Nothing}
 	end
 	end
-	
+
 	TextField(dims::Union{Tuple{Integer,Integer},Integer,Nothing}=nothing; default::AbstractString="", placeholder::Union{AbstractString,Nothing}=nothing) = TextField(dims, default, placeholder)
 	TextField(dims, default) = TextField(dims, default, nothing)
-	
+
 	function Base.show(io::IO, m::MIME"text/html", t::TextField)
-		show(io, m, 
+		show(io, m,
 		if t.dims === nothing || t.dims isa Integer
 			@htl("""<input $((
 				type="text",
@@ -486,7 +495,7 @@ begin
 		end
 		)
 	end
-	
+
 	Base.get(t::TextField) = t.default
 	Bonds.initial_value(t::TextField) = t.default
 	Bonds.possible_values(t::TextField) = Bonds.InfinitePossibilities()
@@ -546,11 +555,11 @@ begin
 	`@bind secret_poem PasswordField(default="Te dansen omdat men leeft")`"""
 	PasswordField
 	end
-	
+
 	function Base.show(io::IO, m::MIME"text/html", passwordfield::PasswordField)
 		show(io, m, @htl("""<input type="password" value=$(passwordfield.default)>"""))
 	end
-	
+
 	Base.get(passwordfield::PasswordField) = passwordfield.default
 	Bonds.initial_value(t::PasswordField) = t.default
 	Bonds.possible_values(t::PasswordField) = Bonds.InfinitePossibilities()
@@ -567,11 +576,11 @@ begin
 		options::Vector{Pair{<:AbstractString,<:Any}}
 		default::Union{Missing, AbstractString}
 	end
-	
+
 	OldSelect(options::AbstractVector{<:AbstractString}; default=missing) = OldSelect([o => o for o in options], default)
-	
+
 	OldSelect(options::AbstractVector{<:Pair{<:AbstractString,<:Any}}; default=missing) = OldSelect(options, default)
-	
+
 	function Base.show(io::IO, m::MIME"text/html", select::OldSelect)
 		show(io, m, @htl(
 			"""<select>$(
@@ -583,7 +592,7 @@ begin
 			end
 		)</select>"""))
 	end
-	
+
 	OldSelect
 end
 
@@ -605,15 +614,15 @@ begin
 	```julia
 	@bind veg Select(["potato", "carrot"])
 	```
-	
+
 	```julia
 	@bind f Select([sin, cos, tan, sqrt])
-	
+
 	f(0.5)
 	```
 
 	You can also specify a display value by giving pairs `bound_value => display_value`:
-	
+
 	```julia
 	@bind f Select([cos => "cosine function", sin => "sine function"])
 
@@ -625,14 +634,14 @@ begin
 		default::Union{Missing, Any}
 	end
 	end
-	
+
 	Select(options::AbstractVector; default=missing) = Select([o => o for o in options], default)
-	
+
 	Select(options::AbstractVector{<:Pair}; default=missing) = Select(options, default)
-	
+
 	function Base.show(io::IO, m::MIME"text/html", select::Select)
 
-		
+
 		# compat code
 		if !AbstractPlutoDingetjes.is_supported_by_display(io, Bonds.transform_value)
 			compat_element = try
@@ -643,12 +652,12 @@ begin
 			return show(io, m, compat_element)
 		end
 
-		
+
 		show(io, m, @htl(
 			"""<select>$(
 		map(enumerate(select.options)) do (i,o)
 				@htl(
-				"<option value=$(i) selected=$(!ismissing(select.default) && o.first == select.default)>$(
+				"<option value='puiselect-$(i)' selected=$(!ismissing(select.default) && o.first == select.default)>$(
 				string(o.second)
 				)</option>")
 			end
@@ -657,28 +666,37 @@ begin
 
 	Base.get(select::Select) = ismissing(select.default) ? first(select.options).first : select.default
 	Bonds.initial_value(select::Select) = ismissing(select.default) ? first(select.options).first : select.default
-	
+
 	Bonds.possible_values(select::Select) = (string(i) for i in 1:length(select.options))
-	
+
 	function Bonds.transform_value(select::Select, val_from_js)
-		# val_from_js will be a String, but let's allow Integers as well, there's no harm in that
-		val_num = val_from_js isa Integer ? val_from_js : tryparse(Int64, val_from_js)
-		select.options[val_num].first
+		if startswith(val_from_js, "puiselect-")
+			val_num = tryparse(Int64, @view val_from_js[begin+10:end])
+			select.options[val_num].first
+		else
+			# and OldSelect was rendered
+			val_from_js
+		end
 	end
-	
+
 	function Bonds.validate_value(select::Select, val_from_js)
-		# val_from_js will be a String, but let's allow Integers as well, there's no harm in that
-		val_num = val_from_js isa Integer ? val_from_js : tryparse(Int64, val_from_js)
-		val_num isa Integer && 1 <= val_num <= length(select.options)
+		(val_from_js isa String) || return false
+		if startswith(val_from_js, "puiselect-")
+			val_num = tryparse(Int64, @view val_from_js[begin+10:end])
+			val_num isa Integer && val_num ∈ eachindex(select.options)
+		else
+			# and OldSelect was rendered
+			any(key == val_from_js for (key,val) in select.options)
+		end
 	end
-	
+
 	result
 end
 
-# ╔═╡ d64bb805-b700-4fd6-8894-2980152ce250
+# ╔═╡ 2d8ddc76-dcd6-496a-aa4b-b6697c2fa741
 # ╠═╡ skip_as_script = true
 #=╠═╡
-Select(["a" => "✅", "b" => "🆘", "c" => "🆘"])
+se_validate_test = Select(["a" => "✅", "b" => "🆘", "c" => "🆘"])
   ╠═╡ =#
 
 # ╔═╡ 4f3ba840-28ce-4790-b929-ce6af8920189
@@ -702,7 +720,12 @@ OldSelect(["a" => "🆘", "b" => "✅", "c" => "🆘"]; default="b")
 # ╔═╡ 6459df3f-143f-4d1a-a238-4447b11cc56c
 # ╠═╡ skip_as_script = true
 #=╠═╡
-HTML(repr(MIME"text/html"(), Select(["a" => "✅", "b" => "🆘", "c" => "🆘"])))
+HTML(repr(MIME"text/html"(), @bind ose2 Select(["a" => "✅", "b" => "🆘", "c" => "🆘"])))
+  ╠═╡ =#
+
+# ╔═╡ a8ea11dd-703f-428a-9c3f-04114afcd069
+#=╠═╡
+ose2
   ╠═╡ =#
 
 # ╔═╡ f3bef89c-61ac-4dcf-bf47-3824f11db26f
@@ -714,7 +737,7 @@ HTML(repr(MIME"text/html"(), Select([sin, cos])))
 # ╔═╡ 42e9e5ab-7d34-4300-a6c0-47f5cde658d8
 begin
 	local result = begin
-"""A group of radio buttons - the user can choose one of the `options`, an array of `String`s. 
+"""A group of radio buttons - the user can choose one of the `options`, an array of `String`s.
 
 `options` can also be an array of pairs `key::String => value::Any`. The `key` is returned via `@bind`; the `value` is shown.
 
@@ -737,7 +760,7 @@ Radio(options::AbstractVector{<:Pair{<:AbstractString,<:Any}}; default=nothing) 
 
 function Base.show(io::IO, m::MIME"text/html", radio::Radio)
     groupname = randstring('a':'z')
-		
+
 	h = @htl(
 		"""<form>$(
 		map(radio.options) do o
@@ -752,11 +775,11 @@ function Base.show(io::IO, m::MIME"text/html", radio::Radio)
 					o.second
 				)</label></div>"""
 			)
-        end	
+        end
 		)<script>
 		const form = currentScript.parentElement
 		const groupname = $(groupname)
-		
+
         const selected_radio = form.querySelector('input[checked]')
 
 		let val = selected_radio?.value
@@ -782,9 +805,9 @@ end
 
 Base.get(radio::Radio) = radio.default
 
-	
+
 	Bonds.initial_value(select::Radio) = select.default
-	Bonds.possible_values(select::Radio) = 
+	Bonds.possible_values(select::Radio) =
 		first.(select.options)
 	function Bonds.validate_value(select::Radio, val)
 		val ∈ (first(p) for p in select.options)
@@ -879,9 +902,9 @@ end
 
 Base.get(select::FilePicker) = nothing
 
-	Bonds.initial_value(select::FilePicker) = 
+	Bonds.initial_value(select::FilePicker) =
 		nothing
-	Bonds.possible_values(select::FilePicker) = 
+	Bonds.possible_values(select::FilePicker) =
 		Bonds.InfinitePossibilities()
 	function Bonds.validate_value(select::FilePicker, val)
 		val isa Nothing || (
@@ -929,9 +952,9 @@ function Base.show(io::IO, m::MIME"text/html", datefield::DateField)
 		))>"))
 end
 Base.get(datefield::DateField) = datefield.default === nothing ? nothing : Dates.DateTime(datefield.default)
-	Bonds.initial_value(datefield::DateField) = 
+	Bonds.initial_value(datefield::DateField) =
 		datefield.default === nothing ? nothing : Dates.DateTime(datefield.default)
-	Bonds.possible_values(datefield::DateField) = 
+	Bonds.possible_values(datefield::DateField) =
 		Bonds.InfinitePossibilities()
 
 	result
@@ -943,7 +966,7 @@ local result = begin
 	Base.@kwdef struct TimeField
     default::Union{Dates.TimeType,Nothing}=nothing
 end
-	
+
 @doc """A time input (`<input type="time">`) - the user can pick a time, the time is returned as `String` via `@bind` (e.g. `"15:45"`). Value is `""` until a time is picked.
 
 Use `default` to set the initial value.
@@ -973,9 +996,9 @@ function Base.show(io::IO, m::MIME"text/html", timefield::TimeField)
 		))>"))
 end
 Base.get(timefield::TimeField) = timefield.default === nothing ?  "" : Dates.format(timefield.default, "HH:MM")
-	Bonds.initial_value(timefield::TimeField) = 
+	Bonds.initial_value(timefield::TimeField) =
 		timefield.default === nothing ?  "" : Dates.format(timefield.default, "HH:MM")
-	Bonds.possible_values(timefield::TimeField) = 
+	Bonds.possible_values(timefield::TimeField) =
 		Bonds.InfinitePossibilities()
 
 	result
@@ -1010,9 +1033,9 @@ function Base.show(io::IO, ::MIME"text/html", colorStringPicker::ColorStringPick
 end
 Base.get(colorStringPicker::ColorStringPicker) = colorStringPicker.default
 
-	Bonds.initial_value(c::ColorStringPicker) = 
+	Bonds.initial_value(c::ColorStringPicker) =
 		c.default
-	Bonds.possible_values(c::ColorStringPicker) = 
+	Bonds.possible_values(c::ColorStringPicker) =
 		Bonds.InfinitePossibilities()
 	function Bonds.validate_value(c::ColorStringPicker, val)
 		val isa String && val[1] == "#"
@@ -1060,22 +1083,22 @@ begin
 	local result = begin
 	Base.@kwdef struct ColorPicker{T <: RGB{N0f8}}
 	    default::T=zero(RGB{N0f8})
-		
+
 		# ColorPicker(; default::RGB{N0f8}) = new{RGB{N0f8}}(default)
 	end
 	@doc """
 	A color input - the user can pick an RGB color, the color is returned as a `Colorant`, a type from the package [Colors.jl](https://github.com/JuliaGraphics/Colors.jl).
-	
+
 	Use `default` to set the initial value.
-	
+
 	# Examples
 	```julia
 	@bind color1 ColorPicker()
 	```
-	
+
 	```julia
 	using Colors
-	
+
 	@bind color2 ColorPicker(default=colorant"#aabbcc")
 	```
 	"""
@@ -1089,12 +1112,12 @@ begin
 		end
 		show(io, m, @htl("<input type=color value=$(_color_to_hex(cp.default))>"))
 	end
-	
+
 	Base.get(cp::ColorPicker) = cp.default
 	Bonds.initial_value(cp::ColorPicker) = cp.default
-	
+
 	Bonds.possible_values(cp::ColorPicker) = Bonds.InfinitePossibilities()
-	
+
 	function Bonds.validate_value(cp::ColorPicker, val)
 		val isa String && val[1] == "#"
 	end
@@ -1119,16 +1142,16 @@ begin
 		```julia
 		TimePicker(; [default::Dates.TimeType], [show_seconds::Bool=false])
 		```
-		
+
 		A time input - the user can pick a time, the time is returned as a `Dates.Time`.
-		
+
 		Use the `default` keyword argument to set the initial value. If no initial value is given, the bound value is set to `nothing` until a time is picked.
-		
+
 		# Examples
 		```julia
 		@bind time1 TimePicker()
 		```
-		
+
 		```julia
 		import Dates
 		@bind time2 TimePicker(default=Dates.Time(23,59,44))
@@ -1140,7 +1163,7 @@ begin
 	TimePicker(default::Dates.TimeType) = _TimePicker(
 		default=default, show_seconds=false)
 	TimePicker(; kwargs...) = _TimePicker(; kwargs...)
-	
+
 	function Base.show(io::IO, m::MIME"text/html", tp::_TimePicker)
 		if !AbstractPlutoDingetjes.is_supported_by_display(io, Bonds.transform_value)
 			return show(io, m, HTML("<span>❌ You need to update Pluto to use this PlutoUI element.</span>"))
@@ -1164,16 +1187,16 @@ begin
 		end
 		return t, step
 	end
-	
+
 	Base.get(tp::_TimePicker) = Bonds.initial_value(tp)
-	Bonds.initial_value(tp::_TimePicker) = 
+	Bonds.initial_value(tp::_TimePicker) =
 		Bonds.transform_value(tp, _fmt_time(tp) |> first)
 
-	
+
 	Bonds.possible_values(tp::_TimePicker) = Bonds.InfinitePossibilities()
-	Bonds.transform_value(tp::_TimePicker, val) = 
+	Bonds.transform_value(tp::_TimePicker, val) =
 		(isnothing(val) || isempty(val)) ? nothing : Dates.Time(val)
-	
+
 	Bonds.validate_value(tp::_TimePicker, s::String) = true # if it is not a valid time string, then `Bonds.transform_value` will fail, which is a safe failure.
 	result
 end
@@ -1188,46 +1211,46 @@ begin
 	```julia
 	DatePicker(; [default::Dates.Date])
 	```
-	
+
 	A date input - the user can pick a date, the date is returned as a `Dates.Date`.
-	
+
 	Use the `default` keyword argument to set the initial value. If no initial value is given, the bound value is set to `nothing` until a date is picked.
-	
+
 	# Examples
 	```julia
 	@bind date1 DatePicker()
 	```
-	
+
 	```julia
 	using Dates
-	
+
 	@bind date2 DatePicker(default=Date(2022, 12, 14))
 	```
 	"""
 	DatePicker
 	end
-	
+
 	function Base.show(io::IO, m::MIME"text/html", dp::DatePicker)
 		show(io, m, @htl("<input $((
 				type="date",
 				value=(dp.default === nothing ? "" : Dates.format(dp.default, "Y-mm-dd")),
 			))>"))
 	end
-	
+
 	Base.get(dp::DatePicker) = Bonds.initial_value(dp)
-	Bonds.initial_value(dp::DatePicker) = 
+	Bonds.initial_value(dp::DatePicker) =
 		dp.default === nothing ? nothing : Dates.Date(dp.default)
-	
+
 	Bonds.possible_values(dp::DatePicker) = Bonds.InfinitePossibilities()
-	
+
 	Bonds.transform_value(dp::DatePicker, val::Nothing) = nothing
 	Bonds.transform_value(dp::DatePicker, val::Dates.TimeType) = Dates.Date(val)
-	Bonds.transform_value(dp::DatePicker, val::String) = 
+	Bonds.transform_value(dp::DatePicker, val::String) =
 		isempty(val) ? nothing : Dates.Date(val)
 
-	Bonds.validate_value(dp::DatePicker, 
+	Bonds.validate_value(dp::DatePicker,
 		val::Union{Nothing,Dates.TimeType,String}) = true # see reasoning in `Bond.validate_value` in TimePicker
-	
+
 	result
 end
 
@@ -1240,39 +1263,39 @@ begin
 	# or with a custom display value:
 	MultiSelect(options::Vector{Pair{Any,String}}; [default], [size::Int])
 	```
-	
+
 	A multi-selector - the user can choose one or more of the `options`.
-	
+
 	See [`Select`](@ref) for a version that allows only one selected item.
-	
+
 	# Examples
 	```julia
 	@bind vegetables MultiSelect(["potato", "carrot"])
-	
+
 	if "carrot" ∈ vegetables
 		"yum yum!"
 	end
 	```
-	
+
 	```julia
 	@bind chosen_functions MultiSelect([sin, cos, tan, sqrt])
-	
+
 	[f(0.5) for f in chosen_functions]
 	```
-	
+
 	You can also specify a display value by giving pairs `bound_value => display_value`:
-	
+
 	```julia
 	@bind chosen_functions MultiSelect([
-		cos => "cosine function", 
+		cos => "cosine function",
 		sin => "sine function",
 	])
-	
+
 	[f(0.5) for f in chosen_functions]
 	```
-	
+
 	The `size` keyword argument may be used to specify how many rows should be visible at once.
-	
+
 	```julia
 	@bind letters MultiSelect(string.('a':'z'), size=20)
 	```
@@ -1285,9 +1308,9 @@ begin
 	end
 	MultiSelect(options::AbstractVector{<:Pair{BT,DT}}; default=missing, size=missing) where {BT,DT} = MultiSelect(options, default, size)
 	MultiSelect(options::AbstractVector{BT}; default=missing, size=missing) where BT = MultiSelect{BT,BT}(Pair{BT,BT}[o => o for o in options], default, size)
-	
+
 	function Base.show(io::IO, m::MIME"text/html", select::MultiSelect)
-	
+
 		# compat code
 		if !AbstractPlutoDingetjes.is_supported_by_display(io, Bonds.transform_value)
 			compat_element = try
@@ -1297,8 +1320,8 @@ begin
 			end
 			return show(io, m, compat_element)
 		end
-		
-		
+
+
 		show(io, m, @htl(
 			"""<select title='Cmd+Click or Ctrl+Click to select multiple items.' multiple size=$(
 				coalesce(select.size, min(10, length(select.options)))
@@ -1311,33 +1334,33 @@ begin
 			end
 		)</select>"""))
 	end
-	
-	
+
+
 		Base.get(select::MultiSelect) = Bonds.initial_value(select)
-		Bonds.initial_value(select::MultiSelect{BT,DT}) where {BT,DT} = 
+		Bonds.initial_value(select::MultiSelect{BT,DT}) where {BT,DT} =
 			ismissing(select.default) ? BT[] : select.default
-		Bonds.possible_values(select::MultiSelect) = 
+		Bonds.possible_values(select::MultiSelect) =
 			subarrays(map(string, 1:length(select.options)))
-			
+
 		function Bonds.transform_value(select::MultiSelect{BT,DT}, val_from_js) where {BT,DT}
 			# val_from_js will be a vector of Strings, but let's allow Integers as well, there's no harm in that
 			@assert val_from_js isa Vector
-			
+
 			val_nums = (
 				v isa Integer ? v : tryparse(Int64, v)
 				for v in val_from_js
 			)
-			
+
 			BT[select.options[v].first for v in val_nums]
 		end
-		
+
 		function Bonds.validate_value(select::MultiSelect, val)
 			val isa Vector && all(val_from_js) do v
 				val_num = v isa Integer ? v : tryparse(Int64, v)
 				1 ≤ val_num ≤ length(select.options)
 			end
 		end
-	
+
 		result
 	end
 
@@ -1371,13 +1394,18 @@ bs
 # ╔═╡ 75b008b2-afc0-4bd5-9183-e0e0d392a4c5
 # ╠═╡ skip_as_script = true
 #=╠═╡
-@bind s2 Slider(30:.5:40; default=38, show_value=true)
+bs2 = @bind s2 Slider(30:.5:40; default=38, show_value=true)
   ╠═╡ =#
 
 # ╔═╡ 9df251eb-b4f5-46cc-a4fe-ff2fa670b773
 # ╠═╡ skip_as_script = true
 #=╠═╡
-@bind s3 Slider([sin, cos, tan], default=cos, show_value=true)
+bs3 = @bind s3 Slider([sin, cos, tan], default=cos, show_value=true)
+  ╠═╡ =#
+
+# ╔═╡ 85900f8c-a1e1-4ffe-a932-b9860749b5ec
+#=╠═╡
+bs2, bs3
   ╠═╡ =#
 
 # ╔═╡ 7c5765ae-c10a-4677-97a3-848a423cb8b9
@@ -1458,7 +1486,7 @@ b1
 # ╔═╡ cd08b524-d778-4acd-9fac-851d90df7179
 # ╠═╡ skip_as_script = true
 #=╠═╡
-@bind cb1 CounterButton() 
+@bind cb1 CounterButton()
   ╠═╡ =#
 
 # ╔═╡ 6135dca4-86f9-4675-8a45-fa16b3d2c3eb
@@ -1555,6 +1583,11 @@ bse = @bind se1 Select(["a" => "default", teststr => teststr])
 bse
   ╠═╡ =#
 
+# ╔═╡ e3369696-eeea-4010-bcf2-6033d806f10a
+#=╠═╡
+HTML(repr(MIME"text/html"(), bse))
+  ╠═╡ =#
+
 # ╔═╡ c9a291c5-b5f5-40a6-acb3-eff4882c1516
 # ╠═╡ skip_as_script = true
 #=╠═╡
@@ -1576,6 +1609,26 @@ bse
 # ╔═╡ 7f05f0b5-051e-4c75-b484-944daf8a274d
 #=╠═╡
 se1, se2, se3, se3(123), se4
+  ╠═╡ =#
+
+# ╔═╡ d64bb805-b700-4fd6-8894-2980152ce250
+#=╠═╡
+Bonds.validate_value(se_validate_test, "a")
+  ╠═╡ =#
+
+# ╔═╡ e60d8ebc-c4b9-4452-8c68-93bb905ddc4d
+#=╠═╡
+Bonds.validate_value(se_validate_test, "aa")
+  ╠═╡ =#
+
+# ╔═╡ 8953e87a-da9d-48ca-9e32-5d635fcf1fb1
+#=╠═╡
+Bonds.validate_value(se_validate_test, "puiselect-1")
+  ╠═╡ =#
+
+# ╔═╡ 19e5b312-8dd8-4dcd-bf66-d0d0078c090c
+#=╠═╡
+Bonds.validate_value(se_validate_test, "puiselect-20")
   ╠═╡ =#
 
 # ╔═╡ 294263fe-0986-4be1-bff5-cd9f7d261c09
@@ -1895,6 +1948,7 @@ export Slider, NumberField, Button, LabelButton, CounterButton, CheckBox, TextFi
 # ╠═38d32393-49be-469c-840b-b58c7339a276
 # ╠═75b008b2-afc0-4bd5-9183-e0e0d392a4c5
 # ╠═9df251eb-b4f5-46cc-a4fe-ff2fa670b773
+# ╠═85900f8c-a1e1-4ffe-a932-b9860749b5ec
 # ╠═7c5765ae-c10a-4677-97a3-848a423cb8b9
 # ╠═f70c1f7b-f3c5-4aff-b39c-add64afbd635
 # ╟─d088bcdb-d851-4ad7-b5a0-751c1f348995
@@ -1946,14 +2000,19 @@ export Slider, NumberField, Button, LabelButton, CounterButton, CheckBox, TextFi
 # ╠═d4bf5249-6027-43c5-bd20-48ad95721e27
 # ╠═d8c60294-0ca6-4cb0-b51d-9f6d6b370b28
 # ╠═fbc6e4c1-4bd8-43a2-ac82-e6f76033fd8e
-# ╟─eb4e17fd-07ba-4031-a39f-0d9fccd3d886
+# ╠═eb4e17fd-07ba-4031-a39f-0d9fccd3d886
 # ╠═57a7d0c9-2f4a-44e6-9b7a-0bbd98611c9d
 # ╠═c9a291c5-b5f5-40a6-acb3-eff4882c1516
 # ╠═9729fa52-7cff-4905-9d1c-1d0eefc8ad6e
 # ╠═d08b571c-fe08-4911-b9f3-5a1075be50ea
 # ╠═a58e383a-3837-4b4c-aa84-cf64436cd870
+# ╠═e3369696-eeea-4010-bcf2-6033d806f10a
 # ╠═7f05f0b5-051e-4c75-b484-944daf8a274d
+# ╠═2d8ddc76-dcd6-496a-aa4b-b6697c2fa741
 # ╠═d64bb805-b700-4fd6-8894-2980152ce250
+# ╠═e60d8ebc-c4b9-4452-8c68-93bb905ddc4d
+# ╠═8953e87a-da9d-48ca-9e32-5d635fcf1fb1
+# ╠═19e5b312-8dd8-4dcd-bf66-d0d0078c090c
 # ╠═4f3ba840-28ce-4790-b929-ce6af8920189
 # ╟─edfdbaee-ec31-40c2-9ad5-28250fe6b651
 # ╠═294263fe-0986-4be1-bff5-cd9f7d261c09
@@ -1962,8 +2021,9 @@ export Slider, NumberField, Button, LabelButton, CounterButton, CheckBox, TextFi
 # ╠═b34d3a01-f8d6-4586-b655-5da84d586cd5
 # ╠═609ab7f4-4fc4-4122-986d-9bfe54fa715d
 # ╠═6459df3f-143f-4d1a-a238-4447b11cc56c
+# ╠═a8ea11dd-703f-428a-9c3f-04114afcd069
 # ╠═f3bef89c-61ac-4dcf-bf47-3824f11db26f
-# ╠═42e9e5ab-7d34-4300-a6c0-47f5cde658d8
+# ╟─42e9e5ab-7d34-4300-a6c0-47f5cde658d8
 # ╠═57232d88-b74f-4823-be61-8db450c93f5c
 # ╠═04ed1e71-d806-423e-b99c-476ea702feb3
 # ╟─7c4303a1-19be-41a2-a6c7-90146e01401d

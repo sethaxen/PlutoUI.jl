@@ -57,6 +57,29 @@ struct Uhm end
 
     @test repr(MIME"text/plain"(), WithIOContext(1.345234523452, compact = true)) == "1.34523"
     @test repr(MIME"text/plain"(), WithIOContext(1.345234523452, compact = false)) == "1.345234523452"
+    
+    
+    # IO Contexts should layer:
+    
+    M = rand(20,20)
+    
+    w1 = PlutoUI.WithIOContext(M, :displaysize=>(10,20), :limit =>true)
+    
+    w2 = PlutoUI.WithIOContext(
+        PlutoUI.WithIOContext(M, :displaysize=>(10,20)),
+    :limit =>true)
+
+    @test repr(MIME"text/plain"(), w1) == 
+        repr(MIME"text/plain"(), w2)
+        
+        
+        
+        
+    @test repr(MIME"text/plain"(), w1) == repr(MIME"text/plain"(), M; context=IOContext(devnull, :displaysize=>(10,20), :limit=>true))
+    
+
+    @test repr(MIME"text/plain"(), w1) == 
+    repr(MIME"text/plain"(), PlutoUI.WithIOContext(M); context=IOContext(devnull, :displaysize=>(10,20), :limit=>true))
 
 
     m = MIME"hello"()
@@ -108,6 +131,17 @@ end
     @test occursin(r"asdf=[\'\"]123px", h5)
     
         
+end
+
+@testset "DownloadButton" begin
+    data = "test"
+    db1 = DownloadButton(data, "test.txt")
+    db2 = DownloadButton(html"<b>test</b>", "test.html")
+
+    hr(x) = repr(MIME"text/html"(), x)
+
+    hr(db1)
+    hr(db2)
 end
 
 function default(x)
